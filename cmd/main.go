@@ -69,11 +69,50 @@ func getCardHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateCardHandler(w http.ResponseWriter, r *http.Request) {
+	card := struct {
+		Front  string
+		Back   string
+		UserId int64
+	}{}
+	if err := json.NewDecoder(r.Body).Decode(&card); err != nil {
+		http.Error(w, "Failed to decode card data", http.StatusBadRequest)
+		log.Println("Failed to decode card data: ", err)
+		return
+	}
+	if err := json.NewEncoder(w).Encode(card.Front); err != nil {
+		http.Error(w, "Failed to encode card data", http.StatusInternalServerError)
+		log.Println("Failed to encode card data: ", err)
+		return
+	}
 
+	if err := database.Update(db, card.Front, card.Back, card.UserId); err != nil {
+		http.Error(w, "Failed to update card", http.StatusInternalServerError)
+		log.Println("Failed to update card: ", err)
+		return
+	}
 }
 
 func deleteCardHandler(w http.ResponseWriter, r *http.Request) {
+	card := struct {
+		Front  string
+		UserId int64
+	}{}
+	if err := json.NewDecoder(r.Body).Decode(&card); err != nil {
+		http.Error(w, "Failed to decode card data", http.StatusBadRequest)
+		log.Println("Failed to decode card data: ", err)
+		return
+	}
+	if err := json.NewEncoder(w).Encode(card.Front); err != nil {
+		http.Error(w, "Failed to encode card data", http.StatusInternalServerError)
+		log.Println("Failed to encode card data: ", err)
+		return
+	}
 
+	if err := database.Delete(db, card.Front, card.UserId); err != nil {
+		http.Error(w, "Failed to delete card", http.StatusInternalServerError)
+		log.Println("Failed to delete card: ", err)
+		return
+	}
 }
 
 func main() {

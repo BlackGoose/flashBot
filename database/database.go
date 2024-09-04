@@ -23,7 +23,7 @@ func Create(db *sqlx.DB, front, back string, user_id int64) error {
 	return err
 }
 
-func Update(db *sqlx.DB, front, back string, user_id int) error {
+func Update(db *sqlx.DB, front, back string, user_id int64) error {
 	_, err := db.Exec("update cards set back = $2 where front = $1 and user_id = $3", front, back, user_id)
 	return err
 }
