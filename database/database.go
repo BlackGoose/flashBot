@@ -9,7 +9,7 @@ import (
 )
 
 type Card struct {
-	Id            int64     `db:"id"`
+	Id            int       `db:"id"`
 	Front         string    `db:"front"`
 	Back          string    `db:"back"`
 	UserId        int64     `db:"user_id"`
@@ -23,19 +23,34 @@ func Create(db *sqlx.DB, front, back string, user_id int64) error {
 	return err
 }
 
-func Update(db *sqlx.DB, front, back string, user_id int64) error {
-	_, err := db.Exec("update cards set back = $2 where front = $1 and user_id = $3", front, back, user_id)
+func UpdateCard(db *sqlx.DB, cardId int, front, back string) error {
+	_, err := db.Exec("update cards set front = $1, back = $2 where id = $3", front, back, cardId)
 	return err
 }
 
-func Get(db *sqlx.DB, user_id int64) ([]Card, error) {
+func UpdateDate(db *sqlx.DB, cardId int, dateExpired time.Time, currentStrike int) error {
+	_, err := db.Exec("update cards set date_expired = $1, current_strike = $2 where id = $3", dateExpired, currentStrike, cardId)
+	return err
+}
+
+func GetList(db *sqlx.DB, user_id int64, to_train bool) ([]Card, error) {
 	cards := []Card{}
-	err := db.Select(&cards, "select * from cards where user_id = $1 and date_expired <= $2", user_id, time.Now())
+	if to_train {
+		err := db.Select(&cards, "select * from cards where user_id = $1 and date_expired <= $2", user_id, time.Now())
+		return cards, err
+	}
+	err := db.Select(&cards, "select * from cards where user_id = $1", user_id)
 	return cards, err
 }
 
-func Delete(db *sqlx.DB, front string, user_id int64) error {
-	_, err := db.Exec("delete from cards * where front = $1 and user_id = $2", front, user_id)
+func Get(db *sqlx.DB, card_id int) (Card, error) {
+	card := Card{}
+	err := db.Get(&card, "select * from cards where id = $1 limit 1", card_id)
+	return card, err
+}
+
+func Delete(db *sqlx.DB, card_id int) error {
+	_, err := db.Exec("delete from cards * where id = $1", card_id)
 	return err
 }
 

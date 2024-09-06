@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
+	"time"
 
 	"github.com/BlackGoose/flashBot/database"
 	"github.com/go-chi/chi"
@@ -13,14 +13,15 @@ import (
 
 const baseUrl string = "localhost:8081"
 const createCardPostfix string = "/create"
-const getCardPostfix string = "/get/{user_id}"
+const getCardPostfix string = "/get"
 const deleteCardPostfix string = "/delete"
 const updateCardPostfix string = "/update"
+const checkCardPostfix string = "/check"
 
 var db *sqlx.DB
 
 func createCardHandler(w http.ResponseWriter, r *http.Request) {
-	card := struct {
+	card := &struct {
 		Front  string
 		Back   string
 		UserId int64
@@ -44,16 +45,18 @@ func createCardHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getCardHandler(w http.ResponseWriter, r *http.Request) {
+	request := &struct {
+		UserID  int64
+		ToTrain bool
+	}{}
 
-	strId := chi.URLParam(r, "user_id")
-	userId, err := strconv.ParseInt(strId, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		log.Println("Invalid request: ", err)
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Failed to decode card data", http.StatusBadRequest)
+		log.Println("Failed to decode card data: ", err)
 		return
 	}
 
-	cards, err := database.Get(db, userId)
+	cards, err := database.GetList(db, request.UserID, request.ToTrain)
 	if err != nil {
 		http.Error(w, "Failed to get cards", http.StatusInternalServerError)
 		log.Println("Failed to get cards: ", err)
@@ -69,48 +72,77 @@ func getCardHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateCardHandler(w http.ResponseWriter, r *http.Request) {
-	card := struct {
+	request := &struct {
+		CardId int
 		Front  string
 		Back   string
-		UserId int64
 	}{}
-	if err := json.NewDecoder(r.Body).Decode(&card); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Failed to decode card data", http.StatusBadRequest)
 		log.Println("Failed to decode card data: ", err)
 		return
 	}
-	if err := json.NewEncoder(w).Encode(card.Front); err != nil {
-		http.Error(w, "Failed to encode card data", http.StatusInternalServerError)
-		log.Println("Failed to encode card data: ", err)
+	if _, err := database.Get(db, request.CardId); err != nil {
+		http.Error(w, "Unknown card", http.StatusInternalServerError)
+		log.Println("Unknown card: ", err)
+		return
+	}
+	if err := database.UpdateCard(db, request.CardId, request.Front, request.Back); err != nil {
+		http.Error(w, "Failed to update card", http.StatusInternalServerError)
+		log.Println("Failed to update card: ", err)
 		return
 	}
 
-	if err := database.Update(db, card.Front, card.Back, card.UserId); err != nil {
-		http.Error(w, "Failed to update card", http.StatusInternalServerError)
-		log.Println("Failed to update card: ", err)
+	if err := json.NewEncoder(w).Encode(&request); err != nil {
+		http.Error(w, "Failed to encode card data", http.StatusInternalServerError)
+		log.Println("Failed to encode card data: ", err)
 		return
 	}
 }
 
 func deleteCardHandler(w http.ResponseWriter, r *http.Request) {
-	card := struct {
-		Front  string
-		UserId int64
+	request := &struct {
+		CardID int
 	}{}
-	if err := json.NewDecoder(r.Body).Decode(&card); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Failed to decode card data", http.StatusBadRequest)
 		log.Println("Failed to decode card data: ", err)
 		return
 	}
-	if err := json.NewEncoder(w).Encode(card.Front); err != nil {
-		http.Error(w, "Failed to encode card data", http.StatusInternalServerError)
-		log.Println("Failed to encode card data: ", err)
-		return
-	}
-
-	if err := database.Delete(db, card.Front, card.UserId); err != nil {
+	if err := database.Delete(db, request.CardID); err != nil {
 		http.Error(w, "Failed to delete card", http.StatusInternalServerError)
 		log.Println("Failed to delete card: ", err)
+		return
+	}
+}
+
+func checkCardHandler(w http.ResponseWriter, r *http.Request) {
+	request := &struct {
+		Check  bool
+		CardId int
+	}{}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Failed to decode card", http.StatusInternalServerError)
+		log.Println("Failed to decode card: ", err)
+		return
+	}
+	card, err := database.Get(db, request.CardId)
+	if err != nil {
+		http.Error(w, "Failed to find card", http.StatusInternalServerError)
+		log.Println("Failed to find card: ", err)
+		return
+	}
+	if request.Check {
+		newStrike := card.CurrentStrike * 2
+		err = database.UpdateDate(db, card.Id, card.DateExpired.AddDate(0, 0, newStrike), newStrike)
+	} else {
+		newStrike := 1
+		err = database.UpdateDate(db, card.Id, time.Now().AddDate(0, 0, newStrike), newStrike)
+	}
+
+	if err != nil {
+		http.Error(w, "Failed to update card", http.StatusInternalServerError)
+		log.Println("Failed to update card: ", err)
 		return
 	}
 }
@@ -128,6 +160,7 @@ func main() {
 	router.Get(getCardPostfix, getCardHandler)
 	router.Delete(deleteCardPostfix, deleteCardHandler)
 	router.Put(updateCardPostfix, updateCardHandler)
+	router.Put(checkCardPostfix, checkCardHandler)
 
 	err = http.ListenAndServe(baseUrl, router)
 	if err != nil {
