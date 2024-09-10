@@ -2,20 +2,18 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/BlackGoose/flashBot/database"
 	"github.com/go-chi/chi"
 	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 )
 
-const baseUrl string = "localhost:8081"
-const createCardPostfix string = "/create"
-const getCardPostfix string = "/get"
-const deleteCardPostfix string = "/delete"
-const updateCardPostfix string = "/update"
 const checkCardPostfix string = "/check"
 
 var db *sqlx.DB
@@ -147,23 +145,41 @@ func checkCardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func init() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Failed to load .env")
+	}
+}
+
 func main() {
 	var err error
 	db, err = database.Init()
 	if err != nil {
-		log.Fatal(err)
+		log.Panicln(err)
 	}
 
 	router := chi.NewRouter()
 
-	router.Post(createCardPostfix, createCardHandler)
-	router.Get(getCardPostfix, getCardHandler)
-	router.Delete(deleteCardPostfix, deleteCardHandler)
-	router.Put(updateCardPostfix, updateCardHandler)
-	router.Put(checkCardPostfix, checkCardHandler)
+	router.Route("/cards", func(r chi.Router) {
+		r.Post("/", createCardHandler)
+		r.Get("/", getCardHandler)
+		r.Delete("/", deleteCardHandler)
+		r.Put("/", updateCardHandler)
+		r.Put(checkCardPostfix, checkCardHandler)
+	})
 
-	err = http.ListenAndServe(baseUrl, router)
-	if err != nil {
-		log.Fatal(err)
+	baseUrl, exist := os.LookupEnv("BASE_URL")
+	if !exist {
+		log.Panicln("Failed to find BASE_URL env")
 	}
+	port, exist := os.LookupEnv("PORT")
+	if !exist {
+		log.Panicln("Failed to find PORT env")
+	}
+	err = http.ListenAndServe(fmt.Sprintf("%v:%v", baseUrl, port), router)
+	if err != nil {
+		log.Panicln(err)
+	}
+	log.Printf("Server started on %v:%v", baseUrl, port)
 }

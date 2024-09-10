@@ -1,10 +1,13 @@
 package database
 
 import (
+	"fmt"
 	"time"
 
-	"github.com/jmoiron/sqlx"
+	"log"
+	"os"
 
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
 
@@ -55,6 +58,27 @@ func Delete(db *sqlx.DB, card_id int) error {
 }
 
 func Init() (*sqlx.DB, error) {
-	db, err := sqlx.Connect("postgres", "postgres://card_admin:password@localhost/cards?sslmode=disable")
+
+	dbUrl, exist := os.LookupEnv("DB_URL")
+	if !exist {
+		log.Panicln("Failed to find DB_URL env")
+	}
+
+	dbName, exist := os.LookupEnv("DB_NAME")
+	if !exist {
+		log.Panicln("Failed to find DB_NAME env")
+	}
+
+	dbUser, exist := os.LookupEnv("DB_USER")
+	if !exist {
+		log.Panicln("Failed to find DB_USER env")
+	}
+
+	dbPassword, exist := os.LookupEnv("DB_PASSWORD")
+	if !exist {
+		log.Panicln("Failed to find DB_PASSWORD env")
+	}
+
+	db, err := sqlx.Connect("postgres", fmt.Sprintf("postgres://%v:%v@%v/%v?sslmode=disable", dbUser, dbPassword, dbUrl, dbName))
 	return db, err
 }
