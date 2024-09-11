@@ -53,12 +53,11 @@ func Get(db *sqlx.DB, card_id int) (Card, error) {
 }
 
 func Delete(db *sqlx.DB, card_id int) error {
-	_, err := db.Exec("delete from cards * where id = $1", card_id)
+	_, err := db.Exec("delete from cards where id = $1", card_id)
 	return err
 }
 
 func Init() (*sqlx.DB, error) {
-
 	dbUrl, exist := os.LookupEnv("DB_URL")
 	if !exist {
 		log.Panicln("Failed to find DB_URL env")
